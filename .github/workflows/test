@@ -1,0 +1,39 @@
+name: Debug Build & Artifact
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["main"]
+    paths-ignore:
+      - "docfx/**"
+      - ".github/workflows/**"
+
+jobs:
+  build_debug:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: "recursive"
+
+      # 设置 Visual Studio/MSVC 环境变量（如需要，可参考原 workflow）
+
+      - name: Build Debug
+        run: |
+          mkdir -p build
+          cd build
+          cmake -DCMAKE_BUILD_TYPE=Debug ..
+          cmake --build . --config Debug -- /m:16
+
+      - name: Collect Debug DLLs
+        run: |
+          mkdir -p build/addons/counterstrikesharp/bin/win64
+          mv build/Debug/*.dll build/addons/counterstrikesharp/bin/win64
+          mkdir build/debug_output/
+          mv build/addons build/debug_output
+
+      - name: Upload Debug Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: counterstrikesharp-debug
+          path: build/debug_output/
