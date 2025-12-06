@@ -1,0 +1,76 @@
+name: 测试构建
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_type:
+        description: "Build type (Debug/Release)"
+        required: true
+        default: "Debug"
+
+env:
+  BUILD_TYPE: ${{ github.event.inputs.build_type }}
+
+permissions: {}
+
+jobs:
+
+  build_windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Visual Studio environment
+        shell: cmd
+        run: |
+          for /f "usebackq delims=*" %%i in (`vswhere -latest -property installationPath`) do (
+            call "%%i"\Common7\Tools\vsdevcmd.bat -arch:x64 -host_arch:x64
+          )
+          for /f "delims== tokens=1,2" %%a in ('set') do (
+            echo>>"%GITHUB_ENV%" %%a=%%b
+          )
+
+      - name: Build Windows
+        run: |
+          mkdir build
+          cd build
+          cmake -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} ..
+          cmake --build . --config ${{env.BUILD_TYPE}} -- /m:16
+
+      - name: Collect artifacts
+        run: |
+          mkdir -p build_output/win64
+          mv build/${{env.BUILD_TYPE}}/*.dll build_output/win64
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: build-windows-${{env.BUILD_TYPE}}
+          path: build_output
+
+  build_linux:
+    runs-on: ubuntu-latest
+    container:
+      image: registry.gitlab.steamos.cloud/steamrt/sniper/sdk:latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Build Linux
+        run: |
+          mkdir build
+          cd build
+          cmake -G Ninja -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} ..
+          cmake --build . --config ${{env.BUILD_TYPE}} -- -j16
+
+      - name: Collect artifacts
+        run: |
+          mkdir -p build_output/linux
+          mv build/addons build_output/linux
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: build-linux-${{env.BUILD_TYPE}}
+          path: build_output
